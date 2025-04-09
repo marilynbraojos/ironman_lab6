@@ -46,12 +46,22 @@ def predict(model, image):
         int: The predicted class label.
     """
 
+    if image is None: 
+        raise ValueError("Input image is None")
+
+    resized_img = cv2.resize(image, (25,33))
+    flattened = resized_img.flatten().astype(np.float32).reshape(1, -1)
+
+    k = 3  # Or make this an input if you want it flexible
+    ret, results, neighbours, dist = model.findNearest(flattened, k)
+    prediction = int(ret)
+
     # TODO: Implement your model's prediction logic here.
     # The function should return an integer corresponding to the predicted class.
     
-    prediction = None
+    # prediction = None
     
-    raise NotImplementedError("predict() is not implemented. Please implement this function.")
+    # raise NotImplementedError("predict() is not implemented. Please implement this function.")
     
     return prediction
 
