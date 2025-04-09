@@ -52,6 +52,24 @@ def load_and_split_data(data_path, split_ratio):
 
     return train_lines, test_lines # return train/test
 
+def crop_center(img, cropx=100, cropy=100):
+    y, x, _ = img.shape
+    startx = x // 2 - cropx // 2
+    starty = y // 2 - cropy // 2
+    return img[starty:starty + cropy, startx:startx + cropx]
+
+def preprocess_and_flatten(img, size=(25, 33)): #reprocessing logic in both training and testing so that we don’t duplicate code
+    cropped = crop_center(img, 100, 100)
+    resized = cv2.resize(cropped, size)
+    b, g, r = cv2.split(resized)
+    b_eq = cv2.equalizeHist(b)
+    g_eq = cv2.equalizeHist(g)
+    r_eq = cv2.equalizeHist(r)
+    equalized = cv2.merge([b_eq, g_eq, r_eq])
+    return equalized.flatten().astype(np.float32)
+
+
+
 def train_model(data_path, train_lines, image_type, model_filename, save_model):
     """
     Loads the images from the training set and uses them to create a KNN model.
@@ -65,13 +83,20 @@ def train_model(data_path, train_lines, image_type, model_filename, save_model):
     Returns:
         knn (knn_model_object): The KNN model.
     """
+    train_data = np.array([
+        preprocess_and_flatten(cv2.imread(data_path + img_name + image_type)) 
+        for img_name, _ in train_lines
+    ], dtype=np.float32)
+    
+    train_labels = np.array([np.int32(label) for _, label in train_lines])
 
-    #This line reads in all images listed in the file in color, and resizes them to 25x33 pixels
-    train = np.array([np.array(cv2.resize(cv2.imread(data_path+train_lines[i][0]+image_type),(25,33))) for i in range(len(train_lines))])
 
-    #Here we reshape each image into a long vector and ensure the data type is a float (which is what KNN wants), note the *3 is due to 3 channels of color.
-    train_data = train.flatten().reshape(len(train_lines), 33*25*3)
-    train_data = train_data.astype(np.float32)
+    # #This line reads in all images listed in the file in color, and resizes them to 25x33 pixels
+    # train = np.array([np.array(cv2.resize(cv2.imread(data_path+train_lines[i][0]+image_type),(25,33))) for i in range(len(train_lines))])
+
+    # #Here we reshape each image into a long vector and ensure the data type is a float (which is what KNN wants), note the *3 is due to 3 channels of color.
+    # train_data = train.flatten().reshape(len(train_lines), 33*25*3)
+    # train_data = train_data.astype(np.float32)
 
     #Read in training labels
     train_labels = np.array([np.int32(train_lines[i][1]) for i in range(len(train_lines))])
@@ -119,15 +144,29 @@ def test_model(data_path, test_lines, image_type, knn_model, knn_value, show_img
 
     for i in range(len(test_lines)):  # for each test image 
         original_img = cv2.imread(data_path+test_lines[i][0]+image_type) # load the full image
-        test_img = np.array(cv2.resize(cv2.imread(data_path+test_lines[i][0]+image_type),(25,33))) # resize image 
+        
+        test_img_raw = cv2.imread(data_path + test_lines[i][0] + image_type)
+        test_img = preprocess_and_flatten(test_img_raw).reshape(1, -1)
+
         if(show_img):
-            cv2.imshow(Title_images, original_img)
-            cv2.imshow(Title_resized, test_img)
+            cv2.imshow(Title_images, test_img_raw)
+            reshaped = test_img.reshape(33, 25, 3).astype(np.uint8)
+            cv2.imshow(Title_resized, reshaped)
             key = cv2.waitKey()
-            if key==27:    # Esc key to stop
+            if key == 27:  # Esc to quit
                 break
-        test_img = test_img.flatten().reshape(1, 33*25*3) # flatten
-        test_img = test_img.astype(np.float32) 
+
+        
+        # test_img = np.array(cv2.resize(cv2.imread(data_path+test_lines[i][0]+image_type),(25,33))) 
+        # # resize image 
+        # if(show_img):
+        #     cv2.imshow(Title_images, original_img)
+        #     cv2.imshow(Title_resized, test_img)
+        #     key = cv2.waitKey()
+        #     if key==27:    # Esc key to stop
+        #         break
+        # test_img = test_img.flatten().reshape(1, 33*25*3) # flatten
+        # test_img = test_img.astype(np.float32) 
 
         test_label = np.int32(test_lines[i][1])
 
